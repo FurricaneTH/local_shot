@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "LocalCut ana penceresi için en küçük gerekli izinler",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:event:default"]
+}
+

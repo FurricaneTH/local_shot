@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>LocalCut ekran görüntüsü ve ekran videosu oluşturmak için ekran erişimi kullanır.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>LocalCut yalnızca siz etkinleştirdiğinizde ekran kaydınıza mikrofon sesi ekler.</string>
+</dict>
+</plist>
+
