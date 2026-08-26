@@ -1,95 +1,95 @@
 # LocalCut
 
-LocalCut, ekran görüntülerini ve mikrofonlu ekran videolarını yakalayan, kaynak dosyaya dokunmadan düzenleyen ve ffmpeg ile paylaşılabilir yerel videolara dönüştüren kişisel bir Tauri 2 uygulamasıdır. Hesap, telemetri, analiz, faturalama, bulut yükleme veya barındırılan kontrol düzlemi yoktur.
+LocalCut is a personal Tauri 2 application for capturing screenshots and microphone-enabled screen videos, editing them non-destructively, and rendering shareable local videos with ffmpeg. It has no accounts, telemetry, analytics, billing, cloud upload, or hosted control plane.
 
-## Tek komutla ilk çalıştırma
+## First run with one command
 
-Önkoşullar: macOS 12+ (Windows/Linux için yakalama API desteği WebView'e bağlıdır), [Node.js 20+](https://nodejs.org/), pnpm 10+, [Rust 1.77.2+](https://rustup.rs/) ve PATH üzerinde `ffmpeg`/`ffprobe`. macOS'ta ayrıca Xcode Command Line Tools gerekir.
+Prerequisites: macOS 12+ (capture API support on Windows/Linux depends on the WebView), [Node.js 20+](https://nodejs.org/), pnpm 10+, [Rust 1.77.2+](https://rustup.rs/), and `ffmpeg`/`ffprobe` on your PATH. macOS also requires Xcode Command Line Tools.
 
-Depo kökünde yalnızca şu komutu çalıştırın:
+From the repository root, run:
 
 ```sh
 ./run-local.sh
 ```
 
-Betik eksikse `node_modules` bağımlılıklarını kurar, araçları doğrular, ön yüzü yerel olarak paketler ve Tauri uygulamasını macOS'ta kararlı `app.localcut.desktop` kimliğine sahip bir `LocalCut.app` paketi olarak açar. Böylece ilk çalıştırma bir geliştirme sunucusuna bağlı değildir ve ekran kaydı izni sonraki çalıştırmalarda aynı uygulamayla eşleşir. Codex Desktop'ın izole Node/pnpm çalışma ortamı bu makinede bulunuyorsa onu otomatik olarak PATH'e ekler. İlk ekran veya mikrofon yakalamasında işletim sistemi izin iletişim kutusunu onaylayın.
+The script installs missing `node_modules`, validates the tools, builds the frontend locally, and opens a stable `LocalCut.app` bundle on macOS with the `app.localcut.desktop` identifier. The first screen or microphone capture will prompt for operating-system permissions.
 
-İsteğe bağlı yerel ayarlar için:
+For optional local configuration:
 
 ```sh
 cp .env.example .env
 ```
 
-`.env` Git tarafından dışlanmıştır. API anahtarı gerekmiyor. Yerel `whisper-cli` kullanacaksanız yürütülebilir dosya ile model yolunu yalnızca `.env` içine yazın; model ve kimlik bilgilerini commit etmeyin.
+`.env` is ignored by Git. No API key is required. If you use a local `whisper-cli`, put only its executable and model paths in `.env`; never commit models or credentials.
 
-## İş akışı
+## Workflow
 
-1. Video veya ekran görüntüsünü; ekran, pencere ya da yüzdelik bölge olarak seçin. Video için mikrofon isteğe bağlıdır.
-2. OS ekran seçicisinden paylaşılacak kaynağı onaylayın. Kayıt zamanlayıcısı her zaman pencerenin üstünde görünür; **Kaydı Durdur** tepsi menüsünde de bulunur.
-3. Kırpma, 1–4× yakınlaştırma, tıklama vurgusu ve zaman aralıklı metin notlarını tahrip edici olmayan reçeteye ekleyin.
-4. H.264/MP4 (`libx264`, CRF 20, AAC, `faststart`) veya WebM (`libvpx-vp9`, CRF 30, Opus) olarak yerel render alın.
-5. Dosya yolunu kopyalayın veya dosyayı klasöründe gösterin. Zorunlu yükleme yoktur.
+1. Choose video or screenshot, then select the screen, a window, or a percentage-based region. Microphone capture is optional for video.
+2. Confirm the source in the operating-system capture picker. The recording timer stays visible, and **Stop Recording** is also available from the tray menu.
+3. Add non-destructive crop, 1–4× zoom, click highlighting, and time-based text notes to the edit recipe.
+4. Render locally as H.264/MP4 (`libx264`, CRF 20, AAC, `faststart`) or WebM (`libvpx-vp9`, CRF 30, Opus).
+5. Copy the file path or reveal the file in its folder. No upload is required.
 
-Her kaydın yanında poster, `.transcript.txt` ve `.summary.md` üretilir. `WHISPER_CLI` ve `WHISPER_MODEL` verilmişse transkript tamamen yerel Whisper çalıştırmasıyla doldurulur; verilmemişse yan dosya açık bir yerel-yapılandırma notuyla yine oluşturulur. Bu durum yakalamayı kaybetmeye neden olmaz. ffmpeg yoksa ham yakalama ve metin yan dosyaları korunur; poster/render hatası yeniden denenebilir biçimde gösterilir.
+Each recording receives a poster frame, `.transcript.txt`, and `.summary.md` beside the media file. When `WHISPER_CLI` and `WHISPER_MODEL` are set, the transcript is filled by a fully local Whisper run; otherwise a clear local-configuration note is still written. If ffmpeg is unavailable, the raw capture and text sidecars are preserved and render/poster errors can be retried.
 
-## Mimari
+## Architecture
 
 ```text
-React yakalama denetimleri
-  ├─ macOS: yerel screencapture ekran/pencere/bölge seçicisi + mikrofon
-  ├─ Destekleyen WebView'ler: MediaRecorder/getDisplayMedia + bölge canvas'ı
-  ├─ görünür sayaç ve tepsiden durdurma
+React capture controls
+  ├─ macOS: native screencapture screen/window/region picker + microphone
+  ├─ Supported WebViews: MediaRecorder/getDisplayMedia + region canvas
+  ├─ visible timer and tray stop action
   └─ Tauri invoke / tray stop event
-       ├─ Rust doğrulama + atomik yerel dosya yazımı
-       ├─ SQLite: başlık, yollar ve tahrip edici olmayan EditRecipe JSON
-       ├─ ffmpeg: crop/zoom/drawbox/drawtext ve H.264/WebM ön ayarları
-       └─ poster + transkript + Markdown özeti
+       ├─ Rust validation + atomic local file writes
+       ├─ SQLite: titles, paths, and non-destructive EditRecipe JSON
+       ├─ ffmpeg: crop/zoom/drawbox/drawtext and H.264/WebM presets
+       └─ poster + transcript + Markdown summary
 ```
 
-- `src/App.tsx`: yakalama, kütüphane, tüm durumlar ve düzenleme görünümü.
-- `src/lib/capture.ts`: destekleyen WebView'ler için `getDisplayMedia`, isteğe bağlı `getUserMedia`, bölge canvas'ı ve MediaRecorder.
-- `src-tauri/src/lib.rs`: macOS yerel yakalama komutları, Tauri komutları, tepsi, dosya doğrulama ve yan dosyalar.
-- `src-tauri/src/db.rs`: gömülü SQLite şeması ve sorguları.
-- `src-tauri/src/render.rs`: güvenli adlandırma, dönüşüm doğrulaması ve ffmpeg render grafiği.
+- `src/App.tsx`: capture controls, library, all UI states, and the edit view.
+- `src/lib/capture.ts`: `getDisplayMedia`, optional `getUserMedia`, region canvas, and MediaRecorder for supported WebViews.
+- `src-tauri/src/lib.rs`: native macOS capture commands, Tauri commands, tray, file validation, and sidecars.
+- `src-tauri/src/db.rs`: embedded SQLite schema and queries.
+- `src-tauri/src/render.rs`: safe naming, transform validation, and the ffmpeg render graph.
 
-Kaynak medya değiştirilmez. Kırpma, yakınlaştırma ve notlar SQLite'ta bir `EditRecipe` olarak saklanır; yalnızca dışa aktarma yeni dosya oluşturur. Metin açıklamaları ffmpeg'e kabuk üzerinden değil argümanlar ve geçici `textfile` ile verilir.
+Source media is never modified. Crop, zoom, and notes are stored in SQLite as an `EditRecipe`; export creates a new file. Text annotations are passed to ffmpeg through arguments and temporary text files, never through a shell command.
 
-## İzinler ve platform davranışı
+## Permissions and platform behavior
 
-- macOS kullanım açıklamaları `src-tauri/Info.plist` içinde ekran kaydı ve mikrofon için tanımlıdır. **Sistem Ayarları → Gizlilik ve Güvenlik → Ekran ve Sistem Ses Kaydı / Mikrofon** bölümünde LocalCut'a izin verin.
-- Tauri yetenekleri `src-tauri/capabilities/default.json` içinde ana pencere ve çekirdek olaylarla sınırlandırılmıştır.
-- macOS Tauri WebView'i `getDisplayMedia` sağlamadığında uygulama otomatik olarak sistemin `/usr/sbin/screencapture` aracına geçer; ekran görüntüsü, video ve isteğe bağlı varsayılan mikrofon bu yerel yoldan çalışır.
-- Yakalama aracı, MediaRecorder, mikrofon veya dosya yöneticisi yoksa uygulama çökmek yerine açıklayıcı ve yeniden denenebilir hata gösterir.
-- Ekran/pencere/bölge seçiminin son kararı işletim sistemine aittir. macOS video seçicisinde pencere kaydı, pencereyi çevreleyen seçili kayıt alanı olarak belirlenir.
+- macOS usage descriptions for screen recording and microphone access are defined in `src-tauri/Info.plist`. Grant LocalCut access under **System Settings → Privacy & Security → Screen & System Audio Recording / Microphone**.
+- Tauri capabilities are limited to the main window and core events in `src-tauri/capabilities/default.json`.
+- When the macOS Tauri WebView does not provide `getDisplayMedia`, the app falls back to `/usr/sbin/screencapture`; screenshots, video, and optional default microphone capture use this local path.
+- If the capture API, MediaRecorder, microphone, or file manager is unavailable, the app shows a descriptive retryable error instead of crashing.
+- The operating system makes the final screen/window/region selection. In the macOS video picker, a window recording is represented as the selected area surrounding that window.
 
-## Veri konumu ve yedekleme
+## Data location and backups
 
-Tüm kullanıcı verileri varsayılan Tauri uygulama veri klasöründedir:
+All user data is stored in the Tauri application-data directory by default:
 
 - macOS: `~/Library/Application Support/app.localcut.desktop/`
-- Windows: `%APPDATA%\app.localcut.desktop\`
+- Windows: `%APPDATA%\\app.localcut.desktop\\`
 - Linux: `~/.local/share/app.localcut.desktop/`
 
-Klasörde `localcut.sqlite3`, `captures/` ve `exports/` bulunur. SQLite WAL kullandığı için güvenli yedekleme sırası:
+The directory contains `localcut.sqlite3`, `captures/`, and `exports/`. Because SQLite uses WAL mode, the safe backup sequence is:
 
-1. Devam eden kaydı durdurun ve LocalCut'tan çıkın.
-2. `app.localcut.desktop` klasörünün tamamını harici diske veya kişisel yedekleme konumuna kopyalayın.
-3. Geri yüklerken LocalCut kapalıyken klasörün tamamını aynı konuma geri koyun.
+1. Stop any active recording and quit LocalCut.
+2. Copy the complete `app.localcut.desktop` directory to an external drive or personal backup location.
+3. Restore the complete directory to the same location while LocalCut is closed.
 
-Dışa aktarılmış bir videonun poster, transkript ve Markdown özetini birlikte taşımak için aynı dosya köküne sahip dört dosyayı kopyalayın.
+To move an exported video with its companion files, copy the four files sharing the same root name: the media file, poster, transcript, and Markdown summary.
 
-## Test ve kalite komutları
+## Test and quality commands
 
 ```sh
 pnpm test
 pnpm build
 cargo test --manifest-path src-tauri/Cargo.toml
-pnpm exec playwright install chromium   # yalnızca ilk E2E çalıştırmasında
+pnpm exec playwright install chromium   # only for the first E2E run
 pnpm test:e2e
 ```
 
-Odaklı birim testleri güvenli dosya adı ve kırpma/yakınlaştırma sınırlarını TypeScript ve Rust katmanında doğrular. Rust entegrasyon testi gerçek ffmpeg ile hem H.264 hem WebM render, poster, transkript ve Markdown yan dosyalarını üretir. Playwright senaryosu yerel kaydı açma → açıklama ekleme → reçeteyi kaydetme → H.264 dışa aktarma akışını doğrular.
+Focused unit tests cover safe filenames and crop/zoom bounds in the TypeScript and Rust layers. The Rust integration test uses real ffmpeg to render both H.264 and WebM plus poster, transcript, and Markdown sidecars. The Playwright scenario validates the local capture → add note → save recipe → H.264 export flow.
 
-## Bilerek kapsam dışı
+## Deliberately out of scope
 
-Herkese açık bulut barındırma/yükleme, izleyici kimliği, etkileşim analizi, telemetri, analiz, hesaplar, faturalama, ekip veya kurumsal çalışma alanları, SSO ve barındırılan kontrol düzlemi eklenmemiştir. LocalCut kişisel ve yerel-öncelikli kalır.
+Public cloud hosting/upload, viewer identity, interaction analytics, telemetry, accounts, billing, team or enterprise workspaces, SSO, and a hosted control plane are deliberately excluded. LocalCut remains personal and local-first.
