@@ -7,7 +7,7 @@ const demoMode = () => new URLSearchParams(window.location.search).has("demo");
 
 const demoItem: MediaItem = {
   id: "demo-capture",
-  title: "Tasarım incelemesi",
+  title: "Design review",
   kind: "video",
   source: "window",
   mediaPath: "/Users/local/LocalCut/captures/design-review.webm",
@@ -23,7 +23,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
   if (isTauri()) return invoke<T>(command, args);
   if (!demoMode()) {
     if (command === "list_media") return [] as T;
-    throw new Error("Bu işlem masaüstü uygulamasında kullanılabilir.");
+    throw new Error("This action is available in the desktop app.");
   }
   if (command === "list_media") return [demoItem] as T;
   if (command === "export_media") {

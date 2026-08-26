@@ -21,6 +21,11 @@ if ! command -v ffmpeg >/dev/null 2>&1 && [ -x "/opt/homebrew/bin/ffmpeg" ]; the
 fi
 export PATH
 
+APP_DIR="$SCRIPT_DIR/src-tauri/target/debug/bundle/macos/LocalCut.app"
+if [ "$(uname -s)" = "Darwin" ] && [ -x "$APP_DIR/Contents/MacOS/localcut" ] && [ "${LOCALCUT_REBUILD:-0}" != "1" ]; then
+  exec /usr/bin/open "$APP_DIR"
+fi
+
 for command in node pnpm cargo ffmpeg; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Eksik önkoşul: $command. README.md içindeki Kurulum bölümüne bakın." >&2
@@ -32,8 +37,22 @@ if [ ! -d node_modules ]; then
   pnpm install --frozen-lockfile=false
 fi
 
-# Some isolated Node runtimes can open Vite's development port while getting
-# stuck resolving modules. Build the frontend first and run Tauri with its
-# bundled local assets so the desktop window never depends on a dev server.
+# Build the frontend first so the desktop window never depends on a dev server.
 pnpm build
-exec cargo run --manifest-path src-tauri/Cargo.toml --features custom-protocol
+cargo build --manifest-path src-tauri/Cargo.toml --features custom-protocol
+
+if [ "$(uname -s)" = "Darwin" ]; then
+  CONTENTS_DIR="$APP_DIR/Contents"
+
+  mkdir -p "$CONTENTS_DIR/MacOS" "$CONTENTS_DIR/Resources"
+  cp "$SCRIPT_DIR/src-tauri/target/debug/localcut" "$CONTENTS_DIR/MacOS/localcut"
+  cp "$SCRIPT_DIR/src-tauri/Info.plist" "$CONTENTS_DIR/Info.plist"
+
+  # A stable application bundle identity is required for macOS Screen
+  # Recording and Microphone permissions to remain associated with LocalCut.
+  /usr/bin/xattr -cr "$APP_DIR"
+  /usr/bin/codesign --force --deep --sign - --identifier app.localcut.desktop "$APP_DIR"
+  exec /usr/bin/open "$APP_DIR"
+fi
+
+exec "$SCRIPT_DIR/src-tauri/target/debug/localcut"

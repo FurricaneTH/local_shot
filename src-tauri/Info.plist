@@ -2,10 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>tr</string>
+  <key>CFBundleDisplayName</key>
+  <string>LocalCut</string>
+  <key>CFBundleExecutable</key>
+  <string>localcut</string>
+  <key>CFBundleIdentifier</key>
+  <string>app.localcut.desktop</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>LocalCut</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>0.1.0</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
   <key>NSScreenCaptureUsageDescription</key>
-  <string>LocalCut ekran görüntüsü ve ekran videosu oluşturmak için ekran erişimi kullanır.</string>
+  <string>LocalCut uses Screen Recording access to create screenshots and screen recordings.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>LocalCut yalnızca siz etkinleştirdiğinizde ekran kaydınıza mikrofon sesi ekler.</string>
+  <string>LocalCut adds microphone audio only when you enable it.</string>
 </dict>
 </plist>
-

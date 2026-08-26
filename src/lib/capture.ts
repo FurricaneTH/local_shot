@@ -30,14 +30,14 @@ async function loadedVideo(stream: MediaStream): Promise<HTMLVideoElement> {
 }
 
 async function getStreams(options: CaptureOptions) {
-  if (!navigator.mediaDevices?.getDisplayMedia) throw new Error("Ekran yakalama API'si bu sistemde kullanılamıyor.");
+  if (!navigator.mediaDevices?.getDisplayMedia) throw new Error("Screen capture is not available in this WebView.");
   const display = await navigator.mediaDevices.getDisplayMedia({
     video: { displaySurface: options.source === "window" ? "window" : "monitor", frameRate: 30 },
     audio: false
   });
   let microphone: MediaStream | undefined;
   if (options.microphone) {
-    if (!navigator.mediaDevices.getUserMedia) throw new Error("Mikrofon API'si bu sistemde kullanılamıyor.");
+    if (!navigator.mediaDevices.getUserMedia) throw new Error("Microphone access is not available in this WebView.");
     microphone = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
   }
   return { display, microphone };
@@ -57,7 +57,7 @@ export async function takeScreenshot(options: CaptureOptions): Promise<CaptureRe
     canvas.height = sh;
     canvas.getContext("2d")?.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
     const blob = await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Görüntü kodlanamadı.")), "image/png")
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("The screenshot could not be encoded.")), "image/png")
     );
     return { blob, durationMs: 0, extension: "png" };
   } finally {
@@ -69,7 +69,7 @@ export async function recordVideo(
   options: CaptureOptions,
   onReady: (stop: () => void) => void
 ): Promise<CaptureResult> {
-  if (!window.MediaRecorder) throw new Error("Video kaydı bu sistemin WebView sürümünde kullanılamıyor.");
+  if (!window.MediaRecorder) throw new Error("Video recording is not available in this WebView.");
   let mimeType = "";
   let extension: "webm" | "mp4" = "webm";
   for (const candidate of ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus"]) {
@@ -80,7 +80,7 @@ export async function recordVideo(
       if (MediaRecorder.isTypeSupported(candidate)) { mimeType = candidate; extension = "mp4"; break; }
     }
   }
-  if (!mimeType) throw new Error("Bu WebView H.264/MP4 veya WebM kaydını desteklemiyor.");
+  if (!mimeType) throw new Error("This WebView does not support H.264/MP4 or WebM recording.");
   const { display, microphone } = await getStreams(options);
   let outputStream = display;
   let animation = 0;
@@ -107,7 +107,7 @@ export async function recordVideo(
     const started = performance.now();
     const complete = new Promise<CaptureResult>((resolve, reject) => {
       recorder.addEventListener("dataavailable", (event) => { if (event.data.size) chunks.push(event.data); });
-      recorder.addEventListener("error", () => reject(new Error("Kayıt sırasında medya kodlayıcı hatası oluştu.")));
+      recorder.addEventListener("error", () => reject(new Error("The media encoder failed during recording.")));
       recorder.addEventListener("stop", () => resolve({
         blob: new Blob(chunks, { type: mimeType }),
         durationMs: performance.now() - started,

@@ -52,7 +52,7 @@ function NoticeBar({ notice, close }: { notice: Notice; close: () => void }) {
     <div className={`notice ${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>
       {notice.tone === "success" ? <Check size={17} /> : notice.tone === "error" ? <RefreshCw size={17} /> : <Sparkles size={17} />}
       <span>{notice.message}</span>
-      {notice.action && <button onClick={notice.action}>{notice.actionLabel ?? "Yeniden dene"}</button>}
+      {notice.action && <button onClick={notice.action}>{notice.actionLabel ?? "Retry"}</button>}
       <button className="icon-button" aria-label="Bildirimi kapat" onClick={close}><X size={16} /></button>
     </div>
   );
@@ -62,7 +62,8 @@ function LibraryCard({ item, active, onClick }: { item: MediaItem; active: boole
   return (
     <button className={`library-card ${active ? "active" : ""}`} onClick={onClick}>
       <div className="thumb">
-        {item.posterPath ? <img src={mediaUrl(item.posterPath)} alt="" /> : item.kind === "video" ? <Video size={24} /> : <ImageIcon size={24} />}
+        {item.kind === "video" ? <Video className="thumb-fallback" size={20} /> : <ImageIcon className="thumb-fallback" size={20} />}
+        {item.posterPath && <img src={mediaUrl(item.posterPath)} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} />}
         {item.kind === "video" && <span className="duration">{formatDuration(item.durationMs)}</span>}
       </div>
       <div className="card-copy"><strong>{item.title}</strong><span>{new Date(item.createdAt).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })} · {item.source}</span></div>
@@ -78,14 +79,15 @@ function Editor({ item, onChanged, notify }: { item: MediaItem; onChanged: (valu
   const [currentMs, setCurrentMs] = useState(0);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  useEffect(() => { setRecipe(item.recipe ?? DEFAULT_RECIPE); setTitle(item.title); }, [item]);
+  useEffect(() => { setRecipe(item.recipe ?? DEFAULT_RECIPE); setTitle(item.title); setPreviewFailed(false); }, [item]);
 
   const updateCrop = (key: keyof Region, value: number) => setRecipe((current) => ({ ...current, crop: clampRegion({ ...current.crop, [key]: value }) }));
   const addAnnotation = (kind: Annotation["kind"], x = 50, y = 50) => {
-    const text = kind === "text" ? annotationText.trim() : "Önemli an";
-    if (!text) return notify({ tone: "error", message: "Açıklama metni boş olamaz." });
+    const text = kind === "text" ? annotationText.trim() : "Key moment";
+    if (!text) return notify({ tone: "error", message: "Note text cannot be empty." });
     const annotation: Annotation = { id: crypto.randomUUID(), kind, text, x, y, startMs: currentMs, endMs: currentMs + 3000 };
     setRecipe((current) => ({ ...current, annotations: [...current.annotations, annotation] }));
     setAnnotationText("");
@@ -98,9 +100,9 @@ function Editor({ item, onChanged, notify }: { item: MediaItem; onChanged: (valu
       const valid = validateRecipe(recipe);
       await backend.updateRecipe(item.id, cleanTitle, valid);
       onChanged({ ...item, title: cleanTitle, recipe: valid });
-      notify({ tone: "success", message: "Tahrip edici olmayan düzenleme reçetesi kaydedildi." });
+      notify({ tone: "success", message: "Non-destructive edits saved." });
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "Düzenleme kaydedilemedi.", action: save });
+      notify({ tone: "error", message: error instanceof Error ? error.message : "Could not save edits.", action: save });
     } finally { setSaving(false); }
   };
   const exportItem = async (format: ExportFormat) => {
@@ -108,9 +110,9 @@ function Editor({ item, onChanged, notify }: { item: MediaItem; onChanged: (valu
     try {
       await save();
       const result = await backend.exportMedia(item.id, safeFileName(title), format);
-      notify({ tone: "success", message: `Dışa aktarıldı: ${pathName(result.mediaPath)}` });
+      notify({ tone: "success", message: `Exported: ${pathName(result.mediaPath)}` });
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "Render tamamlanamadı.", action: () => exportItem(format) });
+      notify({ tone: "error", message: error instanceof Error ? error.message : "Render failed.", action: () => exportItem(format) });
     } finally { setExporting(null); }
   };
   const previewClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -122,59 +124,64 @@ function Editor({ item, onChanged, notify }: { item: MediaItem; onChanged: (valu
   return (
     <main className="workspace">
       <div className="editor-topbar">
-        <div><span className="eyebrow">DÜZENLEME REÇETESİ</span><input aria-label="Kayıt başlığı" value={title} maxLength={96} onChange={(event) => setTitle(event.target.value)} /></div>
+        <div><span className="eyebrow">PREVIEW</span><input aria-label="Recording title" value={title} maxLength={96} onChange={(event) => setTitle(event.target.value)} /></div>
         <div className="top-actions">
-          <button className="secondary" onClick={save} disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} Kaydet</button>
+          <button className="secondary" onClick={save} disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} Save</button>
           <div className="export-group">
-            <button onClick={() => exportItem("h264")} disabled={!!exporting}>{exporting === "h264" ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />} H.264 dışa aktar</button>
-            <button className="format-button" aria-label="WebM dışa aktar" onClick={() => exportItem("webm")} disabled={!!exporting}>WebM</button>
+            <button onClick={() => exportItem("h264")} disabled={!!exporting}>{exporting === "h264" ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />} Export MP4</button>
+            <button className="format-button" aria-label="Export WebM" onClick={() => exportItem("webm")} disabled={!!exporting}>WebM</button>
           </div>
         </div>
       </div>
 
       <div className="editor-grid">
         <section className="stage-card">
-          <div className="stage" onClick={previewClick} title={recipe.cursorHighlight ? "Önemli an vurgusu eklemek için tıklayın" : undefined}>
-            {item.kind === "video" ? (
-              <video ref={videoRef} src={mediaUrl(item.mediaPath)} controls onTimeUpdate={(event) => setCurrentMs(event.currentTarget.currentTime * 1000)} />
-            ) : <img src={mediaUrl(item.mediaPath)} alt={item.title} />}
+          <div className="stage" onClick={previewClick}>
+            {previewFailed ? (
+              <div className="media-error">
+                <ImageIcon size={30} />
+                <strong>Preview unavailable</strong>
+                <span>The file was saved. Open its location in Finder.</span>
+                <button onClick={(event) => { event.stopPropagation(); void backend.revealPath(item.mediaPath); }}><FolderOpen size={15} /> Show in Finder</button>
+              </div>
+            ) : item.kind === "video" ? (
+              <video ref={videoRef} src={mediaUrl(item.mediaPath)} controls onError={() => setPreviewFailed(true)} onTimeUpdate={(event) => setCurrentMs(event.currentTarget.currentTime * 1000)} />
+            ) : <img src={mediaUrl(item.mediaPath)} alt={item.title} onError={() => setPreviewFailed(true)} />}
             {recipe.annotations.filter((note) => currentMs >= note.startMs && currentMs <= note.endMs).map((note) => (
               <div key={note.id} className={note.kind === "spotlight" ? "spotlight" : "text-note"} style={{ left: `${note.x}%`, top: `${note.y}%` }}>{note.kind === "text" && note.text}</div>
             ))}
           </div>
           <div className="stage-meta">
-            <span><Timer size={15} /> {formatDuration(currentMs)} / {formatDuration(item.durationMs)}</span>
-            <span><Scissors size={15} /> Kaynak dosya korunuyor</span>
+            {item.kind === "video" ? <span><Timer size={15} /> {formatDuration(currentMs)} / {formatDuration(item.durationMs)}</span> : <span />}
+            <span><Scissors size={15} /> Original preserved</span>
           </div>
         </section>
 
         <aside className="inspector">
+          <div className="inspector-heading"><strong>Edit</strong><span>Optional</span></div>
           <section>
-            <h3><Crop size={17} /> Kırpma</h3>
+            <h3><Maximize2 size={17} /> Zoom</h3>
+            <label className="range-label"><input aria-label="Zoom" type="range" min="1" max="4" step="0.1" value={recipe.zoom} onChange={(event) => setRecipe({ ...recipe, zoom: Number(event.target.value) })} /><strong>{recipe.zoom.toFixed(1)}×</strong></label>
+          </section>
+          <section>
+            <h3><Highlighter size={17} /> Highlight & note</h3>
+            <label className="toggle-row"><span>Click the preview to highlight</span><input type="checkbox" checked={recipe.cursorHighlight} onChange={(event) => setRecipe({ ...recipe, cursorHighlight: event.target.checked })} /></label>
+            <div className="annotation-input"><input aria-label="Note text" placeholder="Add a short note…" maxLength={500} value={annotationText} onChange={(event) => setAnnotationText(event.target.value)} /><button aria-label="Add note" onClick={() => addAnnotation("text")}><Plus size={18} /></button></div>
+            <div className="annotation-list">
+              {recipe.annotations.length === 0 ? <p>No notes yet.</p> : recipe.annotations.map((note) => <button key={note.id} onClick={() => setRecipe({ ...recipe, annotations: recipe.annotations.filter((item) => item.id !== note.id) })}><span>{formatDuration(note.startMs)} · {note.text}</span><X size={14} /></button>)}
+            </div>
+          </section>
+          <details className="advanced-panel">
+            <summary><span><Crop size={16} /> Crop settings</span><ChevronRight size={15} /></summary>
             <div className="field-grid">
               {(["x", "y", "width", "height"] as const).map((key) => <label key={key}><span>{key === "width" ? "Genişlik" : key === "height" ? "Yükseklik" : key.toUpperCase()} (%)</span><input type="number" min="0" max="100" value={recipe.crop[key]} onChange={(event) => updateCrop(key, Number(event.target.value))} /></label>)}
             </div>
-          </section>
-          <section>
-            <h3><Maximize2 size={17} /> Yakınlaştırma</h3>
-            <label className="range-label"><input aria-label="Yakınlaştırma" type="range" min="1" max="4" step="0.1" value={recipe.zoom} onChange={(event) => setRecipe({ ...recipe, zoom: Number(event.target.value) })} /><strong>{recipe.zoom.toFixed(1)}×</strong></label>
-          </section>
-          <section>
-            <h3><MousePointer2 size={17} /> İmleç vurgusu</h3>
-            <label className="toggle-row"><span>Sahneye tıklayarak vurgu ekle</span><input type="checkbox" checked={recipe.cursorHighlight} onChange={(event) => setRecipe({ ...recipe, cursorHighlight: event.target.checked })} /></label>
-          </section>
-          <section>
-            <h3><Highlighter size={17} /> Önemli anlar</h3>
-            <div className="annotation-input"><input aria-label="Açıklama metni" placeholder="Bu adıma dikkat…" maxLength={500} value={annotationText} onChange={(event) => setAnnotationText(event.target.value)} /><button aria-label="Açıklama ekle" onClick={() => addAnnotation("text")}><Plus size={18} /></button></div>
-            <div className="annotation-list">
-              {recipe.annotations.length === 0 ? <p>Henüz not yok. Videoyu oynatıp bir not ekleyin.</p> : recipe.annotations.map((note) => <button key={note.id} onClick={() => setRecipe({ ...recipe, annotations: recipe.annotations.filter((item) => item.id !== note.id) })}><span>{formatDuration(note.startMs)} · {note.text}</span><X size={14} /></button>)}
-            </div>
-          </section>
-          <section className="companion-files">
-            <h3><FileText size={17} /> Yan dosyalar</h3>
-            <button onClick={() => backend.revealPath(item.transcriptPath)}><span>Transkript</span><FolderOpen size={15} /></button>
-            <button onClick={() => backend.revealPath(item.summaryPath)}><span>Markdown özeti</span><FolderOpen size={15} /></button>
-          </section>
+          </details>
+          <details className="advanced-panel companion-files">
+            <summary><span><FileText size={16} /> Companion files</span><ChevronRight size={15} /></summary>
+            <button onClick={() => backend.revealPath(item.transcriptPath)}><span>Transcript</span><FolderOpen size={15} /></button>
+            <button onClick={() => backend.revealPath(item.summaryPath)}><span>Markdown summary</span><FolderOpen size={15} /></button>
+          </details>
         </aside>
       </div>
     </main>
@@ -201,7 +208,7 @@ export default function App() {
       setItems(result);
       setSelectedId((current) => current && result.some((item) => item.id === current) ? current : result[0]?.id ?? null);
     } catch (error) {
-      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Kayıtlar yüklenemedi.", action: load });
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Could not load recordings.", action: load });
     } finally { setLoading(false); }
   }, []);
 
@@ -220,21 +227,21 @@ export default function App() {
 
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? null, [items, selectedId]);
   const persistCapture = async (blob: Blob, durationMs: number, extension: "png" | "webm" | "mp4") => {
-    const title = `${kind === "video" ? "Kayıt" : "Ekran görüntüsü"} ${new Date().toLocaleString("tr-TR")}`;
+    const title = `${kind === "video" ? "Recording" : "Screenshot"} ${new Date().toLocaleString("en-US")}`;
     const item = await backend.saveCapture({ bytes: await blobBytes(blob), extension, title, kind, source, durationMs: Math.round(durationMs) });
     setItems((current) => [item, ...current]);
     setSelectedId(item.id);
-    setNotice({ tone: "success", message: `${item.title} yerel olarak kaydedildi.` });
+    setNotice({ tone: "success", message: `${item.title} saved locally.` });
   };
   const acceptNativeCapture = (item: MediaItem) => {
     setItems((current) => [item, ...current.filter((value) => value.id !== item.id)]);
     setSelectedId(item.id);
-    setNotice({ tone: "success", message: `${item.title} yerel olarak kaydedildi.` });
+    setNotice({ tone: "success", message: `${item.title} saved locally.` });
   };
   const startCapture = async () => {
-    setNotice({ tone: "info", message: "İşletim sistemi yakalama seçicisi açılıyor…" });
+    setNotice({ tone: "info", message: "Opening the system capture picker…" });
     const options = { kind, source, microphone: kind === "video" && microphone, region };
-    const title = `${kind === "video" ? "Kayıt" : "Ekran görüntüsü"} ${new Date().toLocaleString("tr-TR")}`;
+    const title = `${kind === "video" ? "Recording" : "Screenshot"} ${new Date().toLocaleString("en-US")}`;
     const nativeCapture = "__TAURI_INTERNALS__" in window && !webScreenCaptureAvailable();
     try {
       if (nativeCapture && kind === "screenshot") {
@@ -248,13 +255,13 @@ export default function App() {
           if (!stopRef.current) return;
           stopRef.current = null;
           void backend.nativeStopRecording().then(acceptNativeCapture).catch((error) => {
-            setNotice({ tone: "error", message: error instanceof Error ? error.message : "Yerel kayıt tamamlanamadı.", action: startCapture });
+            setNotice({ tone: "error", message: error instanceof Error ? error.message : "Local recording could not be completed.", action: startCapture });
           }).finally(() => {
             setRecordingSince(null);
             setElapsed(0);
           });
         };
-        setNotice({ tone: "info", message: source === "screen" ? "Yerel ekran kaydı başladı." : "macOS seçicisinden yakalanacak alanı seçin." });
+        setNotice({ tone: "info", message: source === "screen" ? "Local screen recording started." : "Choose an area in the macOS picker." });
         return;
       }
       if (kind === "screenshot") {
@@ -271,13 +278,13 @@ export default function App() {
     } catch (error) {
       stopRef.current = null;
       setRecordingSince(null);
-      const message = error instanceof DOMException && error.name === "NotAllowedError" ? "Ekran veya mikrofon izni verilmedi. Sistem ayarlarından izin verip yeniden deneyin." : error instanceof Error ? error.message : "Yakalama başlatılamadı.";
-      const needsSettings = message.includes("Sistem Ayarları") || message.includes("ekran kaydı izni");
+      const message = error instanceof DOMException && error.name === "NotAllowedError" ? "Screen or microphone permission was denied. Allow it in System Settings and try again." : error instanceof Error ? error.message : "Could not start capture.";
+      const needsSettings = message.includes("System Settings") || message.includes("screen recording permission");
       setNotice({
         tone: "error",
         message,
         action: needsSettings ? () => { void backend.openScreenCaptureSettings(); } : startCapture,
-        actionLabel: needsSettings ? "Ayarları aç" : "Yeniden dene"
+        actionLabel: needsSettings ? "Open Settings" : "Retry"
       });
     }
   };
@@ -285,8 +292,8 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="brand"><div className="brand-mark"><Aperture size={20} /></div><div><strong>LocalCut</strong><span>Capture. Clarify. Keep local.</span></div></div>
-        <div className="privacy-pill"><span /> Yalnızca bu Mac’te</div>
+        <div className="brand"><div className="brand-mark"><Aperture size={20} /></div><div><strong>LocalCut</strong><span>Your captures stay on this Mac</span></div></div>
+        <div className="privacy-pill"><span /> Local &amp; private</div>
       </header>
       <NoticeBar notice={notice} close={() => setNotice(null)} />
       {recordingSince !== null && (
@@ -295,28 +302,28 @@ export default function App() {
       <div className="app-body">
         <aside className="sidebar">
           <section className="capture-panel">
-            <span className="eyebrow">YENİ YAKALAMA</span>
-            <div className="kind-switch"><CaptureButton icon={<Video size={17} />} label="Video" active={kind === "video"} onClick={() => setKind("video")} /><CaptureButton icon={<ImageIcon size={17} />} label="Görüntü" active={kind === "screenshot"} onClick={() => setKind("screenshot")} /></div>
-            <label className="field-label">Kaynak</label>
+            <span className="eyebrow">CAPTURE</span>
+            <div className="kind-switch"><CaptureButton icon={<Video size={17} />} label="Video" active={kind === "video"} onClick={() => setKind("video")} /><CaptureButton icon={<ImageIcon size={17} />} label="Screenshot" active={kind === "screenshot"} onClick={() => setKind("screenshot")} /></div>
+            <label className="field-label">Capture source</label>
             <div className="source-grid">
-              <CaptureButton icon={<Monitor size={17} />} label="Ekran" active={source === "screen"} onClick={() => setSource("screen")} />
-              <CaptureButton icon={<Square size={17} />} label="Pencere" active={source === "window"} onClick={() => setSource("window")} />
-              <CaptureButton icon={<Crop size={17} />} label="Bölge" active={source === "region"} onClick={() => setSource("region")} />
+              <CaptureButton icon={<Monitor size={17} />} label="Screen" active={source === "screen"} onClick={() => setSource("screen")} />
+              <CaptureButton icon={<Square size={17} />} label="Window" active={source === "window"} onClick={() => setSource("window")} />
+              <CaptureButton icon={<Crop size={17} />} label="Region" active={source === "region"} onClick={() => setSource("region")} />
             </div>
-            {source === "region" && <div className="region-fields">{(["x", "y", "width", "height"] as const).map((key) => <label key={key}>{key[0].toUpperCase()}<input aria-label={`Bölge ${key}`} type="number" min="0" max="100" value={region[key]} onChange={(event) => setRegion(clampRegion({ ...region, [key]: Number(event.target.value) }))} /></label>)}</div>}
-            <label className={`mic-row ${kind === "screenshot" ? "disabled" : ""}`}><span><Mic size={17} /><span><strong>Mikrofon</strong><small>{kind === "screenshot" ? "Görüntülerde kullanılamaz" : "İsteğe bağlı ses kaydı"}</small></span></span><input type="checkbox" disabled={kind === "screenshot"} checked={microphone} onChange={(event) => setMicrophone(event.target.checked)} /></label>
-            <button className="capture-cta" onClick={startCapture} disabled={recordingSince !== null}>{kind === "video" ? <><span className="record-icon" /> Kaydı başlat</> : <><Aperture size={18} /> Görüntü al</>}</button>
+            {source === "region" && <div className="region-fields">{(["x", "y", "width", "height"] as const).map((key) => <label key={key}>{key[0].toUpperCase()}<input aria-label={`Region ${key}`} type="number" min="0" max="100" value={region[key]} onChange={(event) => setRegion(clampRegion({ ...region, [key]: Number(event.target.value) }))} /></label>)}</div>}
+            <label className={`mic-row ${kind === "screenshot" ? "disabled" : ""}`}><span><Mic size={17} /><span><strong>Microphone</strong><small>{kind === "screenshot" ? "Not available for screenshots" : "Optional audio"}</small></span></span><input type="checkbox" disabled={kind === "screenshot"} checked={microphone} onChange={(event) => setMicrophone(event.target.checked)} /></label>
+            <button className="capture-cta" onClick={startCapture} disabled={recordingSince !== null}>{kind === "video" ? <><span className="record-icon" /> Start recording</> : <><Aperture size={18} /> Take screenshot</>}</button>
           </section>
-          <div className="library-heading"><span className="eyebrow">KÜTÜPHANE</span><span>{items.length}</span></div>
+          <div className="library-heading"><span className="eyebrow">RECORDINGS</span><span>{items.length}</span></div>
           <div className="library-list">
-            {loading ? Array.from({ length: 3 }).map((_, index) => <div className="skeleton-card" key={index}><i /><span /></div>) : items.length === 0 ? <div className="empty-library"><div><Volume2 size={21} /></div><strong>Henüz kayıt yok</strong><p>İlk ekran görüntünüz veya videonuz burada görünecek.</p></div> : items.map((item) => <LibraryCard key={item.id} item={item} active={item.id === selectedId} onClick={() => setSelectedId(item.id)} />)}
+            {loading ? Array.from({ length: 3 }).map((_, index) => <div className="skeleton-card" key={index}><i /><span /></div>) : items.length === 0 ? <div className="empty-library"><div><Volume2 size={21} /></div><strong>No recordings yet</strong><p>Your first screenshot or video will appear here.</p></div> : items.map((item) => <LibraryCard key={item.id} item={item} active={item.id === selectedId} onClick={() => setSelectedId(item.id)} />)}
           </div>
         </aside>
         {selected ? <Editor item={selected} notify={setNotice} onChanged={(value) => setItems((current) => current.map((item) => item.id === value.id ? value : item))} /> : (
-          <main className="welcome-state"><div className="welcome-art"><div className="frame frame-one" /><div className="frame frame-two" /><MousePointer2 size={26} /></div><span className="eyebrow">YEREL YARATICI ALANINIZ</span><h1>Bir fikri yakalayın.<br />Netleştirip paylaşın.</h1><p>Ekranınızı kaydedin, önemli anları işaretleyin ve dosyayı kendi bilgisayarınızdan dışa aktarın.</p><button onClick={startCapture}><Aperture size={18} /> İlk yakalamayı başlat</button></main>
+          <main className="welcome-state"><div className="welcome-art"><div className="frame frame-one" /><div className="frame frame-two" /><MousePointer2 size={26} /></div><h1>Capture your screen.</h1><p>Choose a screenshot or video on the left. Then crop it, add notes, and save it locally.</p><button onClick={startCapture}><Aperture size={18} /> Start your first capture</button></main>
         )}
       </div>
-      <footer><span>Verileriniz cihazınızdan ayrılmaz.</span>{selected && <div><button onClick={() => backend.copyPath(selected.mediaPath)}><Clipboard size={14} /> Yolu kopyala</button><button onClick={() => backend.revealPath(selected.mediaPath)}><FolderOpen size={14} /> Klasörde göster</button></div>}</footer>
+      <footer><span>Never uploaded to the cloud.</span>{selected && <div><button onClick={() => backend.copyPath(selected.mediaPath)}><Clipboard size={14} /> Copy location</button><button onClick={() => backend.revealPath(selected.mediaPath)}><FolderOpen size={14} /> Show in Finder</button></div>}</footer>
     </div>
   );
 }

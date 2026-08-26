@@ -48,13 +48,13 @@ fn filter_graph(recipe: &EditRecipe, scratch: &Path) -> Result<String, String> {
 fn command_failure(output: std::process::Output) -> String {
     let message = String::from_utf8_lossy(&output.stderr);
     let tail = message.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
-    format!("ffmpeg render işlemi başarısız oldu.\n{tail}")
+    format!("ffmpeg render failed.\n{tail}")
 }
 
 pub fn poster(ffmpeg: &str, source: &Path, destination: &Path) -> Result<(), String> {
     let output = Command::new(ffmpeg).args(["-hide_banner", "-loglevel", "error", "-y", "-ss", "0.5", "-i"])
         .arg(source).args(["-frames:v", "1", "-q:v", "2"]).arg(destination).output()
-        .map_err(|_| format!("ffmpeg bulunamadı: '{ffmpeg}'. .env içindeki FFMPEG_BIN değerini kontrol edin."))?;
+        .map_err(|_| format!("ffmpeg was not found: '{ffmpeg}'. Check FFMPEG_BIN in .env."))?;
     if output.status.success() { Ok(()) } else { Err(command_failure(output)) }
 }
 
@@ -62,7 +62,7 @@ pub fn export(ffmpeg: &str, exports: &Path, item: &MediaItem, request: &ExportRe
     let recipe = validate_recipe(item.recipe.clone());
     fs::create_dir_all(exports).map_err(|error| error.to_string())?;
     let stem = format!("{}-{}", safe_file_name(&request.title), chrono::Local::now().format("%Y%m%d-%H%M%S"));
-    let extension = match request.format.as_str() { "h264" => "mp4", "webm" => "webm", _ => return Err("Dışa aktarma biçimi h264 veya webm olmalıdır.".into()) };
+    let extension = match request.format.as_str() { "h264" => "mp4", "webm" => "webm", _ => return Err("Export format must be h264 or webm.".into()) };
     let destination = exports.join(format!("{stem}.{extension}"));
     let scratch = exports.join(format!(".{stem}-render"));
     fs::create_dir_all(&scratch).map_err(|error| error.to_string())?;
@@ -76,7 +76,7 @@ pub fn export(ffmpeg: &str, exports: &Path, item: &MediaItem, request: &ExportRe
     } else {
         command.args(["-c:v", "libvpx-vp9", "-crf", "30", "-b:v", "0", "-row-mt", "1", "-c:a", "libopus", "-b:a", "128k"]);
     }
-    let output = command.arg(&destination).output().map_err(|_| format!("ffmpeg bulunamadı: '{ffmpeg}'. .env içindeki FFMPEG_BIN değerini kontrol edin."))?;
+    let output = command.arg(&destination).output().map_err(|_| format!("ffmpeg was not found: '{ffmpeg}'. Check FFMPEG_BIN in .env."))?;
     let _ = fs::remove_dir_all(&scratch);
     if !output.status.success() { return Err(command_failure(output)); }
     let poster_path = exports.join(format!("{stem}.poster.jpg"));
@@ -84,8 +84,8 @@ pub fn export(ffmpeg: &str, exports: &Path, item: &MediaItem, request: &ExportRe
     let transcript_path = exports.join(format!("{stem}.transcript.txt"));
     let summary_path = exports.join(format!("{stem}.summary.md"));
     fs::copy(&item.transcript_path, &transcript_path).map_err(|error| error.to_string())?;
-    let mut summary = format!("# {}\n\n- Kaynak: `{}`\n- Süre: {:.1} saniye\n- Dışa aktarma: {}\n\n## Önemli anlar\n", request.title, item.media_path, item.duration_ms as f64 / 1000.0, request.format);
-    if recipe.annotations.is_empty() { summary.push_str("\nHenüz açıklama eklenmedi.\n"); }
+    let mut summary = format!("# {}\n\n- Source: `{}`\n- Duration: {:.1} seconds\n- Export: {}\n\n## Key moments\n", request.title, item.media_path, item.duration_ms as f64 / 1000.0, request.format);
+    if recipe.annotations.is_empty() { summary.push_str("\nNo notes added yet.\n"); }
     for note in &recipe.annotations { summary.push_str(&format!("\n- `{}` — {}\n", note.start_ms / 1000, note.text)); }
     fs::write(&summary_path, summary).map_err(|error| error.to_string())?;
     Ok(ExportResult { media_path: path_string(destination), poster_path: path_string(poster_path), transcript_path: path_string(transcript_path), summary_path: path_string(summary_path) })

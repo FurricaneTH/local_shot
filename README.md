@@ -12,7 +12,7 @@ Depo kökünde yalnızca şu komutu çalıştırın:
 ./run-local.sh
 ```
 
-Betik eksikse `node_modules` bağımlılıklarını kurar, araçları doğrular, ön yüzü yerel olarak paketler ve Tauri uygulamasını paketlenmiş dosyalardan açar. Böylece ilk çalıştırma bir geliştirme sunucusuna bağlı değildir. Codex Desktop'ın izole Node/pnpm çalışma ortamı bu makinede bulunuyorsa onu otomatik olarak PATH'e ekler. İlk ekran veya mikrofon yakalamasında işletim sistemi izin iletişim kutusunu onaylayın.
+Betik eksikse `node_modules` bağımlılıklarını kurar, araçları doğrular, ön yüzü yerel olarak paketler ve Tauri uygulamasını macOS'ta kararlı `app.localcut.desktop` kimliğine sahip bir `LocalCut.app` paketi olarak açar. Böylece ilk çalıştırma bir geliştirme sunucusuna bağlı değildir ve ekran kaydı izni sonraki çalıştırmalarda aynı uygulamayla eşleşir. Codex Desktop'ın izole Node/pnpm çalışma ortamı bu makinede bulunuyorsa onu otomatik olarak PATH'e ekler. İlk ekran veya mikrofon yakalamasında işletim sistemi izin iletişim kutusunu onaylayın.
 
 İsteğe bağlı yerel ayarlar için:
 
